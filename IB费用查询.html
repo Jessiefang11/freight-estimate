@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Freight Estimate</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}
+.container{max-width:720px;margin:0 auto;padding:24px 20px}
+header{text-align:center;margin-bottom:32px}
+.logo-row{margin-bottom:16px}
+.logo{width:180px;height:auto}
+h1{font-size:24px;font-weight:700;color:#003366;margin-bottom:4px}
+.subtitle{font-size:14px;color:#607080;letter-spacing:.5px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.field{display:flex;flex-direction:column}
+.field label{font-size:13px;font-weight:600;color:#334155;margin-bottom:6px}
+.req{color:#e53e3e}.opt{color:#94a3b8;font-weight:400;font-size:12px}.hint{color:#94a3b8;font-weight:400;font-size:11px}
+.field input{padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;transition:border .2s;background:#fff}
+.field input:focus{outline:none;border-color:#003366;box-shadow:0 0 0 3px rgba(0,51,102,.1)}
+button#calcBtn{width:100%;padding:12px;background:#003366;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:background .2s}
+button#calcBtn:hover{background:#004488}
+.results{margin-top:28px}
+.results h2{font-size:17px;color:#003366;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #e2e8f0}
+.result-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.result-card{background:#fff;border-radius:10px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.08);border:1px solid #e2e8f0;transition:transform .15s}
+.result-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.1)}
+.card-title{font-size:13px;color:#607080;font-weight:600;margin-bottom:8px}
+.card-value{font-size:22px;font-weight:700;color:#003366}
+.card-value.error{font-size:14px;color:#e53e3e;font-weight:500}
+.card-detail{font-size:11px;color:#94a3b8;margin-top:6px;line-height:1.5}
+.hidden{display:none}
+footer{margin-top:40px;text-align:center;font-size:12px;color:#94a3b8}
+@media(max-width:540px){.form-grid,.result-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo-row">
+      <svg class="logo" viewBox="0 0 200 50" xmlns="http://www.w3.org/2000/svg">
+        <rect width="200" height="50" rx="6" fill="#003366"/>
+        <text x="100" y="22" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold" font-family="Arial">SSG - ISS</text>
+        <text x="100" y="38" text-anchor="middle" fill="#8bb8e8" font-size="9" font-family="Arial">Supply Chain Solutions</text>
+      </svg>
+    </div>
+    <h1>Freight Estimate</h1>
+    <p class="subtitle">PCG &amp; ISG IB Transport</p>
+  </header>
+
+  <form id="calcForm" onsubmit="return false;">
+    <div class="form-grid">
+      <div class="field required">
+        <label>重量 (公斤) <span class="req">*</span></label>
+        <input type="number" id="weight" min="0" step="0.01" required placeholder="输入重量">
+      </div>
+      <div class="field required">
+        <label>体积 (CBM) <span class="req">*</span></label>
+        <input type="number" id="volume" min="0" step="0.001" required placeholder="输入体积">
+      </div>
+      <div class="field required">
+        <label>提货城市 <span class="req">*</span></label>
+        <input type="text" id="city" list="cityList" required placeholder="输入或选择城市">
+        <datalist id="cityList"></datalist>
+      </div>
+      <div class="field required">
+        <label>板数 <span class="req">*</span> <span class="hint">（无板写0）</span></label>
+        <input type="number" id="pallets" min="0" step="1" required placeholder="0">
+      </div>
+      <div class="field optional">
+        <label>货值 (人民币) <span class="opt">选填</span></label>
+        <input type="number" id="cargoValue" min="0" step="0.01" placeholder="选填">
+      </div>
+    </div>
+    <button type="button" id="calcBtn" onclick="calculate()">查询运费</button>
+  </form>
+
+  <div id="results" class="results hidden">
+    <h2>查询结果</h2>
+    <div class="result-grid">
+      <div class="result-card" id="ltlCard">
+        <div class="card-title">零担运费</div>
+        <div class="card-value" id="ltlResult">-</div>
+        <div class="card-detail" id="ltlDetail"></div>
+      </div>
+      <div class="result-card" id="ftlCard">
+        <div class="card-title">整车运费</div>
+        <div class="card-value" id="ftlResult">-</div>
+        <div class="card-detail" id="ftlDetail"></div>
+      </div>
+      <div class="result-card" id="domCard">
+        <div class="card-title">国内快递运费</div>
+        <div class="card-value" id="domResult">-</div>
+        <div class="card-detail" id="domDetail"></div>
+      </div>
+      <div class="result-card" id="intlCard">
+        <div class="card-title">海外快递运费</div>
+        <div class="card-value" id="intlResult">-</div>
+        <div class="card-detail" id="intlDetail"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>&copy; 2026 SSG-ISS &middot; PCG &amp; ISG IB Transport</p>
+  </footer>
+</div>
+
+<script>
+// ===== DATA =====
+
+// 板数对应车型表
+function getPalletVehicle(p){
+  if(p<=0) return null;
+  if(p<=3) return "2 Tons";
+  if(p<=11) return "5 Tons";
+  if(p<=12) return "8 Tons";
+  if(p<=16) return "10 Tons";
+  if(p<=20) return "40'DC";
+  if(p<=32) return "53'";
+  return null;
+}
+
+// 整车运费表 {车型: {城市: 价格}}
+const ftlData = {
+"2 Tons":{"吴江":650,"上海":960,"常熟":950,"合肥":1800,"深圳":6000,"光明":5700,"苏州":500,"南京":2200,"Jiashan":1250,"宁波":2300,"无锡":1000,"台州":2300,"武汉":6300,"南宁":11500,"北京":6800,"东莞":6800,"厦门":6000,"佛山":7000,"福清":6500,"广州":6300,"昆山":550,"中山":7500,"珠海":8000,"青岛":4300,"南昌":4800,"天津":5600,"金华":2000,"惠州":6800,"香港":5680,"广西":9300},
+"5 Tons":{"吴江":850,"上海":1120,"常熟":1200,"合肥":2000,"深圳":6800,"光明":6120,"苏州":550,"南京":2700,"Jiashan":1500,"宁波":2800,"无锡":1200,"台州":3000,"武汉":6700,"南宁":14000,"北京":8200,"东莞":7800,"厦门":7000,"佛山":7800,"福清":7200,"广州":7500,"昆山":700,"中山":8400,"珠海":8900,"青岛":4800,"南昌":5800,"天津":6300,"金华":2500,"惠州":7800,"香港":7150,"广西":12500},
+"8 Tons":{"吴江":1000,"上海":1250,"常熟":1300,"合肥":2500,"深圳":7500,"光明":7130,"苏州":700,"南京":3100,"Jiashan":1600,"宁波":3000,"无锡":1500,"台州":3550,"武汉":8500,"南宁":16000,"北京":10000,"东莞":8300,"厦门":7800,"佛山":8500,"福清":8500,"广州":8000,"昆山":900,"中山":9100,"珠海":9600,"青岛":5200,"南昌":6300,"天津":7000,"金华":2650,"惠州":8300,"香港":7770},
+"10 Tons":{"吴江":1600,"上海":1600,"常熟":2000,"合肥":3300,"深圳":9000,"光明":8550,"苏州":1100,"南京":4100,"Jiashan":2100,"宁波":3500,"无锡":2000,"台州":4300,"武汉":9500,"南宁":18000,"北京":11000,"东莞":9300,"厦门":8500,"佛山":10000,"福清":9500,"广州":9900,"昆山":1200,"中山":10500,"珠海":11100,"青岛":6000,"南昌":7500,"天津":7700,"金华":3350,"惠州":9300},
+"40'DC":{"吴江":2150,"上海":2150,"常熟":2600,"合肥":3800,"深圳":10000,"光明":9500,"苏州":1250,"南京":4600,"Jiashan":2350,"宁波":4000,"无锡":2300,"台州":4700,"武汉":10500,"南宁":19500,"北京":12500,"东莞":10800,"厦门":9300,"佛山":11250,"福清":10300,"广州":11000,"昆山":1350,"中山":12100,"珠海":12700,"青岛":7800,"南昌":9300,"天津":12000,"金华":3950,"惠州":10800,"香港":12400},
+"53'":{"合肥":6000}
+};
+
+// 零担运费表
+const ltlData = {
+"南昌":{"rate":2,"min":1000,"extra":300},
+"青岛":{"rate":1.5,"min":1300,"extra":400},
+"东莞":{"rate":1.8,"min":1500,"extra":0},
+"广州":{"rate":2,"min":2000,"extra":0},
+"合肥":{"rate":0.9,"min":1000,"extra":0},
+"深圳":{"rate":1.6,"min":1500,"extra":0},
+"武汉":{"rate":1.5,"min":1200,"extra":0},
+"北京":{"rate":1.8,"min":1800,"extra":0},
+"重庆":{"rate":2,"min":1800,"extra":350},
+"福清":{"rate":1.8,"min":1800,"extra":0},
+"中山":{"rate":2.2,"min":2200,"extra":0},
+"珠海":{"rate":2.5,"min":2500,"extra":0},
+"天津":{"rate":1.8,"min":1200,"extra":600},
+"厦门":{"rate":1.7,"min":1000,"extra":500},
+"香港":{"rate":6.35,"min":888,"extra":200}
+};
+
+// 顺丰国内快递运费表 {城市: {province,first,cont1,cont2}}
+const sfData = {};
+const sfRaw = [
+["滁州","安徽",39,2,1.4],["合肥","安徽",35,2,1.4],["蚌埠","安徽",39,2,1.4],["芜湖","安徽",39,2,1.4],["淮南","安徽",39,2,1.4],["马鞍山","安徽",39,2,1.4],["安庆","安徽",39,2,1.4],["宿州","安徽",39,2,1.4],["亳州/阜阳","安徽",41,2,1.4],["黄山","安徽",39,2,1.4],["淮北","安徽",39,2,1.4],["铜陵","安徽",39,2,1.4],["宣城","安徽",39,2,1.4],["六安","安徽",39,2,1.4],["池州","安徽",39,2,1.3],
+["北京","北京",89,4.1,2.7],
+["福州","福建",86,3,2.2],["厦门","福建",86,2.9,2.3],["宁德","福建",88,2.8,2],["莆田","福建",86,2.7,1.9],["泉州","福建",86,2.9,2.1],["漳州","福建",86,2.9,2.3],["龙岩","福建",86,2.9,2.3],["三明","福建",86,2.9,2.3],["南平","福建",86,2.9,2.3],
+["临夏回族自治州","甘肃",95,4.1,2.5],["兰州","甘肃",95,4.1,2.5],["定西","甘肃",95,4.1,2.5],["平凉","甘肃",95,4.1,2.5],["庆阳","甘肃",95,4.1,2.5],["金昌/武威","甘肃",95,4.1,2.5],["张掖","甘肃",95,4.1,2.5],["嘉峪关/酒泉","甘肃",95,4.1,2.5],["天水","甘肃",95,4.1,2.5],["陇南","甘肃",95,4.1,2.5],["甘南藏族自治州","甘肃",95,4.1,2.5],["白银","甘肃",95,4.1,2.5],
+["广州","广东",105,3.8,2.7],["汕尾","广东",105,3.8,2.4],["阳江","广东",105,3.8,2.4],["揭阳","广东",105,3.8,2.4],["茂名","广东",105,3.8,2.4],["江门","广东",105,3.8,2.3],["韶关","广东",105,3.8,2.4],["惠州","广东",105,3.6,2.5],["梅州","广东",107,3.8,2.3],["汕头","广东",105,3.7,2.3],["深圳","广东",105,3.6,2.6],["珠海","广东",105,3.8,2.4],["佛山","广东",105,3.8,2.4],["肇庆","广东",105,3.8,2.5],["湛江","广东",105,3.8,2.4],["中山","广东",105,3.8,2.6],["河源","广东",105,3.8,2.4],["清远","广东",105,3.8,2.4],["云浮","广东",105,3.8,2.4],["潮州","广东",105,3.8,2.2],["东莞","广东",105,3.8,2.4],
+["防城港","广西",105,3.7,2.8],["崇左/南宁","广西",105,3.7,2.8],["来宾/柳州","广西",108,3.7,2.8],["桂林","广西",107,3.7,2.8],["贺州/梧州","广西",105,3.7,2.8],["贵港/玉林","广西",105,3.7,2.8],["百色","广西",105,3.7,2.8],["钦州","广西",105,3.7,2.8],["河池","广西",105,3.7,2.8],["北海","广西",105,3.7,2.8],
+["遵义","贵州",90,3.6,2.6],["安顺","贵州",85,3.8,2.7],["贵阳","贵州",87,3.8,2.7],["黔南布依族苗族自治州","贵州",85,3.8,2.7],["黔东南苗族侗族自治州","贵州",85,3.8,2.7],["铜仁","贵州",85,3.8,2.7],["毕节","贵州",85,3.8,2.7],["六盘水","贵州",85,3.8,2.7],["黔西南布依族苗族自治州","贵州",85,3.8,2.7],
+["三亚","海南",125,3.5,2.5],["海口","海南",125,3.5,2.5],
+["邯郸","河北",87,3.9,2.3],["石家庄","河北",87,3.9,2.2],["保定","河北",87,3.9,2.2],["张家口","河北",87,3.9,2.3],["承德","河北",87,3.9,2.3],["唐山","河北",87,3.9,2.3],["廊坊","河北",87,3.9,2.5],["沧州","河北",87,3.9,2.3],["衡水","河北",87,3.9,2.3],["邢台","河北",87,3.9,2.3],["秦皇岛","河北",87,3.9,2.3],
+["商丘","河南",87,3.2,1.9],["郑州","河南",86,3.3,1.9],["安阳","河南",86,3.1,1.9],["新乡","河南",86,3.3,1.9],["许昌","河南",88,3.1,1.9],["平顶山","河南",87,3.2,1.9],["信阳","河南",66,2.9,2.3],["南阳","河南",86,3.1,3],["开封","河南",86,3.1,1.9],["洛阳","河南",86,3.2,1.9],["焦作","河南",86,3.1,1.9],["鹤壁","河南",86,3.1,1.9],["濮阳","河南",86,3.1,1.9],["周口","河南",86,3.1,1.9],["漯河","河南",86,3.1,1.9],["驻马店","河南",87,3.1,1.9],["三门峡","河南",86,3.1,1.9],
+["哈尔滨","黑龙江",86,3.6,3],["齐齐哈尔","黑龙江",86,3.6,3],["牡丹江","黑龙江",86,3.6,3],["佳木斯","黑龙江",86,3.6,3],["绥化","黑龙江",86,3.6,3],["黑河","黑龙江",86,3.6,3],["大兴安岭地区","黑龙江",86,3.6,3],["伊春","黑龙江",86,3.6,3],["大庆","黑龙江",86,3.6,3],["七台河","黑龙江",86,3.6,3],["鸡西","黑龙江",86,3.6,3],["鹤岗","黑龙江",86,3.6,3],["双鸭山","黑龙江",86,3.6,3],
+["武汉","湖北",85,3.4,2.3],["襄阳","湖北",85,3.4,2.1],["鄂州","湖北",85,3.3,2.1],["孝感","湖北",85,3.4,2.1],["黄冈","湖北",85,3.4,2.1],["黄石","湖北",85,3.4,2.1],["咸宁","湖北",85,3.4,2.1],["荆州","湖北",85,3.4,2.1],["宜昌","湖北",88,3.3,2.4],["恩施土家族苗族自治州","湖北",85,3.4,2.1],["十堰","湖北",85,3.4,2.1],["随州","湖北",85,3.4,2.1],["荆门","湖北",85,3.4,2.2],["潜江/天门/仙桃","湖北",86,3.4,2.1],
+["岳阳","湖南",86,3.2,2.2],["长沙","湖南",86,3.2,2.2],["湘潭","湖南",86,3.2,2.2],["株洲","湖南",86,3.2,2.2],["衡阳","湖南",86,3.2,2.2],["郴州","湖南",86,3.3,2.2],["常德","湖南",86,3.2,2.2],["益阳","湖南",86,3.2,2.2],["娄底","湖南",86,3.2,2.2],["邵阳","湖南",86,3.3,2.2],["湘西土家族苗族自治州","湖南",86,3.3,2.2],["张家界","湖南",86,3.3,2.2],["怀化","湖南",86,3.3,2.2],["永州","湖南",86,3.3,2.2],
+["长春","吉林",86,3.7,2.8],["吉林","吉林",87,3.9,2.9],["延边朝鲜族自治州","吉林",87,3.9,2.9],["四平","吉林",87,3.9,2.9],["通化","吉林",87,3.9,2.9],["白城","吉林",87,3.9,2.9],["辽源","吉林",87,3.9,2.9],["松原","吉林",87,3.9,2.9],["白山","吉林",87,3.9,2.9],
+["南京","江苏",38,1.9,1.5],["无锡","江苏",39,1.9,1.4],["镇江","江苏",39,1.9,1.5],["苏州","江苏",39,1.9,1.5],["南通","江苏",39,1.9,1.4],["扬州","江苏",39,1.9,1.6],["盐城","江苏",39,1.9,1.5],["徐州","江苏",39,1.9,1.5],["淮安","江苏",39,1.9,1.7],["连云港","江苏",39,1.9,1.5],["常州","江苏",39,1.9,1.5],["泰州","江苏",39,1.9,1.4],["宿迁","江苏",40,2,1.6],
+["鹰潭","江西",86,3.1,2],["新余","江西",86,3,2.2],["南昌","江西",86,3.1,2.1],["九江","江西",88,3,2],["上饶","江西",69,3.1,1.5],["抚州","江西",86,3,2.2],["宜春","江西",86,3,2.2],["吉安","江西",86,3.2,2.2],["赣州","江西",88,3,2.1],["景德镇","江西",88,3,2.1],["萍乡","江西",86,3.1,2.2],
+["沈阳/铁岭/抚顺","辽宁",90,3.8,2.8],["大连","辽宁",87,4,2.9],["鞍山","辽宁",90,3.7,2.9],["本溪","辽宁",87,3.8,2.8],["丹东","辽宁",90,3.8,2.7],["锦州","辽宁",87,3.8,2.8],["营口","辽宁",87,3.8,2.8],["阜新","辽宁",87,3.8,2.8],["辽阳","辽宁",87,3.8,2.8],["朝阳","辽宁",87,3.8,2.8],["盘锦","辽宁",87,3.7,2.8],["葫芦岛","辽宁",87,3.8,2.8],
+["呼伦贝尔","内蒙古东北部",108,3.7,2.9],["兴安盟","内蒙古东北部",108,3.7,2.9],["呼和浩特","内蒙古西部",108,3.5,2.7],["包头","内蒙古西部",108,3.5,2.7],["乌海","内蒙古西部",108,3.5,2.7],["乌兰察布","内蒙古西部",108,3.5,2.7],["鄂尔多斯","内蒙古西部",108,3.5,2.7],["巴彦淖尔","内蒙古西部",108,3.6,2.7],["阿拉善盟","内蒙古西部",108,3.6,2.7],["通辽","内蒙古中部",96,4.1,2.9],["赤峰","内蒙古中部",96,4.1,2.9],["锡林郭勒盟","内蒙古中部",96,4.1,2.9],
+["银川","宁夏",106,4.2,2.7],["石嘴山","宁夏",106,4.2,2.7],["吴忠","宁夏",106,4.2,2.7],["固原","宁夏",106,4.2,2.7],["中卫","宁夏",106,4.2,2.7],
+["海北藏族自治州","青海",102,4.6,2.7],["西宁","青海",102,4.6,2.7],["海东","青海",102,4.6,2.7],["黄南藏族自治州","青海",102,4.6,2.7],["海南藏族自治州","青海",102,4.6,2.7],["果洛藏族自治州","青海",102,4.6,2.7],["海西蒙古族藏族自治州","青海",102,4.6,2.7],["格尔木","青海",102,4.6,2.7],
+["菏泽","山东",69,3.2,1.9],["济南","山东",69,3.2,1.7],["青岛","山东",69,3.2,2],["淄博","山东",69,3.2,2],["德州","山东",69,3.4,2],["烟台","山东",69,3.4,2.1],["潍坊","山东",69,3.2,2.1],["济宁","山东",69,3.3,2.1],["泰安","山东",69,3.3,2.1],["临沂","山东",67,3.3,1.5],["滨州","山东",69,3.4,2.1],["东营","山东",69,3.4,2.1],["威海","山东",69,3.4,2.1],["枣庄","山东",67,3.2,2.1],["日照","山东",67,3.2,2.1],["聊城","山东",69,3.4,2.1],
+["朔州","山西",85,3.9,2.8],["忻州","山西",85,3.9,2.8],["太原","山西",85,3.9,2.8],["大同","山西",85,3.9,2.8],["阳泉","山西",85,3.8,2.7],["晋中","山西",85,3.8,2.7],["长治","山西",85,3.8,2.7],["晋城","山西",85,3.8,2.7],["临汾","山西",85,3.9,2.8],["吕梁","山西",85,3.9,2.8],["运城","山西",85,3.8,2.7],
+["西安/咸阳","陕西",86,3.5,2.6],["延安","陕西",86,3.6,2.6],["榆林","陕西",86,3.7,2.7],["渭南","陕西",86,3.6,2.6],["商洛","陕西",86,3.6,2.6],["安康","陕西",86,3.6,2.6],["汉中","陕西",86,3.6,2.6],["宝鸡","陕西",86,3.6,2.6],["铜川","陕西",86,3.6,2.6],
+["上海","上海",40,2,1.5],
+["成都/资阳/眉山","四川",87,3.7,2.5],["攀枝花","四川",87,3.7,2.5],["自贡","四川",87,3.7,2.5],["绵阳","四川",87,3.7,2.5],["南充","四川",87,3.7,2.5],["达州","四川",87,3.7,2.4],["遂宁","四川",87,3.7,2.5],["广安","四川",87,3.7,2.4],["巴中","四川",87,3.7,2.5],["泸州","四川",87,3.7,2.5],["宜宾","四川",87,3.7,2.5],["内江","四川",87,3.7,2.5],["乐山","四川",87,3.7,2.5],["凉山彝族自治州","四川",87,3.7,2.5],["雅安","四川",87,3.7,2.5],["甘孜藏族自治州","四川",87,3.8,2.6],["阿坝藏族羌族自治州","四川",87,3.7,2.5],["德阳","四川",87,3.7,2.5],["广元","四川",87,3.7,2.5],
+["天津","天津",90,3.8,2.5],
+["拉萨","西藏自治区",142,6.3,6.3],["日喀则","西藏自治区",150,6.6,6.6],["山南","西藏自治区",150,6.6,6.6],["林芝","西藏自治区",150,6.6,6.6],["那曲","西藏自治区",150,6.6,6.6],
+["塔城地区","新疆",129,5.3,3.2],["哈密地区","新疆",129,5.3,3.2],["和田地区","新疆",129,5.3,3.2],["阿勒泰地区","新疆",129,5.3,3.2],["克孜勒苏柯尔克孜自治州","新疆",129,5.3,3.2],["博尔塔拉蒙古自治州","新疆",129,5.4,3],["克拉玛依","新疆",129,5,3.1],["乌鲁木齐","新疆",129,5,3.3],["奎屯","新疆",129,5.4,3.6],["石河子","新疆",129,5.4,3.6],["昌吉回族自治州","新疆",129,5.4,3.6],["吐鲁番地区","新疆",129,5.4,3.6],["巴音郭楞蒙古自治州","新疆",129,5.4,3.6],["阿克苏地区","新疆",129,5.4,3.6],["喀什地区","新疆",129,5.4,3.6],["伊犁哈萨克自治州","新疆",129,5.4,3.6],
+["怒江傈僳族自治州","云南",104,4.7,3.2],["丽江","云南",104,4.7,3.2],["西双版纳傣族自治州","云南",104,4.7,3.2],["德宏傣族景颇族自治州","云南",104,4.8,3.2],["昭通","云南",104,4.7,3.2],["昆明","云南",104,4.7,3.2],["大理白族自治州","云南",104,4.7,3.2],["红河哈尼族彝族自治州","云南",104,4.7,3.2],["曲靖","云南",104,4.7,3.2],["保山","云南",104,4.7,3.2],["文山壮族苗族自治州","云南",104,4.7,3.2],["玉溪","云南",104,4.7,3.2],["楚雄彝族自治州","云南",104,4.7,3.2],["普洱","云南",104,4.7,3.2],["临沧","云南",104,4.7,3.2],["迪庆藏族自治州","云南",104,4.7,3.2],
+["衢州","浙江",39,1.9,1.3],["杭州","浙江",39,1.9,1.3],["湖州","浙江",39,1.9,1.3],["嘉兴","浙江",39,1.9,1.3],["宁波","浙江",40,2,1.4],["绍兴","浙江",39,1.9,1.3],["台州","浙江",39,1.9,1.3],["温州","浙江",39,1.9,1.3],["丽水","浙江",39,1.9,1.3],["金华","浙江",39,1.9,1.3],["舟山","浙江",39,1.9,1.3],
+["重庆","重庆",89,3.7,2.2]
+];
+sfRaw.forEach(r=>{sfData[r[0]]={province:r[1],first:r[2],cont1:r[3],cont2:r[4]}});
+
+// DHL国际快递运费表 - 首重查找表 (kg -> zone prices array [Z1..Z9])
+const dhlFirst = {};
+const dhlFirstRaw = [
+[0.5,12.96,18.27,16.51,19.54,19.6,20.06,25.71,32.96,49.54],
+[1,15.74,22.43,20.93,23.9,25.83,26.69,32.5,41.71,60.61],
+[1.5,18.47,26.6,25.35,28.27,32.05,33.32,39.28,50.45,71.67],
+[2,21.2,30.77,29.77,32.64,38.27,39.95,46.06,59.19,82.73],
+[2.5,23.98,34.94,34.19,37,44.49,46.58,52.84,67.93,93.78],
+[3,26.72,39.11,38.15,41.22,50.4,53.07,60.04,76.67,104.8],
+[3.5,29.46,43.28,42.11,45.44,56.31,59.56,67.24,85.41,115.82],
+[4,32.2,47.45,46.07,49.66,62.22,66.05,74.44,94.15,126.84],
+[4.5,34.94,51.62,50.03,53.88,68.13,72.54,81.64,102.89,137.86],
+[5,37.68,55.79,53.99,58.1,74.04,79.03,88.84,111.63,148.88],
+[5.5,40.24,59.64,57.8,62.26,79.38,85.51,95.33,119.45,158.81],
+[6,42.8,63.49,61.61,66.42,84.72,91.99,101.82,127.27,168.74],
+[6.5,45.36,67.34,65.42,70.58,90.06,98.47,108.31,135.09,178.67],
+[7,47.92,71.19,69.23,74.74,95.4,104.95,114.8,142.91,188.6],
+[7.5,50.48,75.04,73.04,78.9,100.74,111.43,121.29,150.73,198.53],
+[8,53.04,78.89,76.85,83.06,106.08,117.91,127.78,158.55,208.46],
+[8.5,55.6,82.74,80.66,87.22,111.42,124.39,134.27,166.37,218.39],
+[9,58.16,86.59,84.47,91.38,116.76,130.87,140.76,174.19,228.32],
+[9.5,60.72,90.44,88.28,95.54,122.1,137.35,147.25,182.01,238.25],
+[10,63.28,94.29,92.09,99.7,127.44,143.83,153.74,189.83,248.18],
+[10.5,65.5,97.59,95.79,103.83,132.43,150.05,159.55,196.72,257.44],
+[11,67.72,100.89,99.49,107.96,137.42,156.27,165.36,203.61,266.7],
+[11.5,69.94,104.19,103.19,112.09,142.41,162.49,171.17,210.5,275.96],
+[12,72.16,107.49,106.89,116.22,147.4,168.71,176.98,217.39,285.22],
+[12.5,74.38,110.79,110.59,120.35,152.39,174.93,182.79,224.28,294.48],
+[13,76.6,114.09,114.29,124.48,157.38,181.15,188.6,231.17,303.74],
+[13.5,78.82,117.39,117.99,128.61,162.37,187.37,194.41,238.06,313],
+[14,81.04,120.69,121.69,132.74,167.36,193.59,200.22,244.95,322.26],
+[14.5,83.26,123.99,125.39,136.87,172.35,199.81,206.03,251.84,331.52],
+[15,85.48,127.29,129.09,141,177.34,206.03,211.84,258.73,340.78],
+[15.5,87.7,130.59,132.79,145.13,182.33,212.25,217.65,265.62,350.04],
+[16,89.92,133.89,136.49,149.26,187.32,218.47,223.46,272.51,359.3],
+[16.5,92.14,137.19,140.19,153.39,192.31,224.69,229.27,279.4,368.56],
+[17,94.36,140.49,143.89,157.52,197.3,230.91,235.08,286.29,377.82],
+[17.5,96.58,143.79,147.59,161.65,202.29,237.13,240.89,293.18,387.08],
+[18,98.8,147.09,151.29,165.78,207.28,243.35,246.7,300.07,396.34],
+[18.5,101.02,150.39,154.99,169.91,212.27,249.57,252.51,306.96,405.6],
+[19,103.24,153.69,158.69,174.04,217.26,255.79,258.32,313.85,414.86],
+[19.5,105.46,156.99,162.39,178.17,222.25,262.01,264.13,320.74,424.12],
+[20,107.68,160.29,166.09,182.3,227.24,268.23,269.94,327.63,433.38],
+[20.5,110.19,165.08,170.27,186.62,232.54,274.04,275.74,334.47,445.99],
+[21,112.7,169.87,174.45,190.94,237.84,279.85,281.54,341.31,458.6],
+[21.5,115.21,174.66,178.63,195.26,243.14,285.66,287.34,348.15,471.21],
+[22,117.72,179.45,182.81,199.58,248.44,291.47,293.14,354.99,483.82],
+[22.5,120.23,184.24,186.99,203.9,253.74,297.28,298.94,361.83,496.43],
+[23,122.74,189.03,191.17,208.22,259.04,303.09,304.74,368.67,509.04],
+[23.5,125.25,193.82,195.35,212.54,264.34,308.9,310.54,375.51,521.65],
+[24,127.76,198.61,199.53,216.86,269.64,314.71,316.34,382.35,534.26],
+[24.5,130.27,203.4,203.71,221.18,274.94,320.52,322.14,389.19,546.87],
+[25,132.78,208.19,207.89,225.5,280.24,326.33,327.94,396.03,559.48],
+[25.5,135.29,212.98,212.07,229.82,285.54,332.14,333.74,402.87,572.09],
+[26,137.8,217.77,216.25,234.14,290.84,337.95,339.54,409.71,584.7],
+[26.5,140.31,222.56,220.43,238.46,296.14,343.76,345.34,416.55,597.31],
+[27,142.82,227.35,224.61,242.78,301.44,349.57,351.14,423.39,609.92],
+[27.5,145.33,232.14,228.79,247.1,306.74,355.38,356.94,430.23,622.53],
+[28,147.84,236.93,232.97,251.42,312.04,361.19,362.74,437.07,635.14],
+[28.5,150.35,241.72,237.15,255.74,317.34,367,368.54,443.91,647.75],
+[29,152.86,246.51,241.33,260.06,322.64,372.81,374.34,450.75,660.36],
+[29.5,155.37,251.3,245.51,264.38,327.94,378.62,380.14,457.59,672.97],
+[30,157.88,256.09,249.69,268.7,333.24,384.43,385.94,464.43,685.58]
+];
+dhlFirstRaw.forEach(r=>{dhlFirst[r[0]]=r.slice(1)});
+
+// DHL续重 [Zone1..Zone9]
+const dhlCont1 = [4,7,7,7.62,9.82,10.34,11.32,13.54,18.31]; // 30.1-70kg per kg
+const dhlCont2 = [3.85,6.78,6.78,7.24,9.51,9.94,10.75,13.27,17.79]; // 70.1-300kg
+const dhlCont3 = [4.36,7.71,7.71,8.33,10.75,11.38,12.45,14.86,20.12]; // 300.1+
+
+// ===== CITY LIST FOR AUTOCOMPLETE =====
+const allCities = new Set();
+Object.keys(ltlData).forEach(c=>allCities.add(c));
+Object.values(ftlData).forEach(v=>Object.keys(v).forEach(c=>allCities.add(c)));
+Object.keys(sfData).forEach(k=>{
+  k.split('/').forEach(c=>allCities.add(c));
+});
+const cityListEl = document.getElementById('cityList');
+[...allCities].sort().forEach(c=>{const o=document.createElement('option');o.value=c;cityListEl.appendChild(o)});
+
+// ===== HELPER: find SF city (supports slash-separated keys) =====
+function findSfCity(city){
+  if(sfData[city]) return sfData[city];
+  for(const k in sfData){
+    if(k.includes('/')){
+      const parts=k.split('/');
+      if(parts.some(p=>p===city)) return sfData[k];
+    }
+  }
+  return null;
+}
+
+// ===== MAIN CALCULATION =====
+function calculate(){
+  const weight=parseFloat(document.getElementById('weight').value);
+  const volume=parseFloat(document.getElementById('volume').value);
+  const city=document.getElementById('city').value.trim();
+  const pallets=parseInt(document.getElementById('pallets').value);
+  const cargoValueStr=document.getElementById('cargoValue').value.trim();
+  const cargoValue=cargoValueStr?parseFloat(cargoValueStr):null;
+
+  if(isNaN(weight)||isNaN(volume)||!city||isNaN(pallets)){
+    alert('请填写所有必填项');return;
+  }
+
+  document.getElementById('results').classList.remove('hidden');
+
+  // 1. 零担运费
+  calcLTL(weight,volume,city);
+  // 2. 整车运费
+  calcFTL(pallets,city);
+  // 3. 国内快递
+  calcDomestic(weight,volume,city,cargoValue);
+  // 4. 海外快递
+  calcIntl(weight,volume);
+}
+
+function calcLTL(weight,volume,city){
+  const el=document.getElementById('ltlResult');
+  const det=document.getElementById('ltlDetail');
+  const d=ltlData[city];
+  if(!d){el.textContent='该城市无零担数据';el.className='card-value error';det.textContent='';return;}
+  const chargeWeight=Math.max(weight,volume*167);
+  const theoryBase=d.rate*chargeWeight;
+  const actualBase=Math.max(theoryBase,d.min);
+  const extra=d.extra||0;
+  const total=actualBase+extra;
+  el.className='card-value';
+  el.textContent='¥ '+total.toFixed(2);
+  det.innerHTML='计费重量: '+chargeWeight.toFixed(2)+'kg | 费率: '+d.rate+'/kg<br>基础运费: ¥'+actualBase.toFixed(2)+(extra?' | 额外: ¥'+extra:'');
+}
+
+function calcFTL(pallets,city){
+  const el=document.getElementById('ftlResult');
+  const det=document.getElementById('ftlDetail');
+  if(pallets<=0){el.textContent='板数为0，不适用';el.className='card-value error';det.textContent='';return;}
+  const vehicle=getPalletVehicle(pallets);
+  if(!vehicle){el.textContent='板数超出范围(最大32)';el.className='card-value error';det.textContent='';return;}
+  const vData=ftlData[vehicle];
+  if(!vData||!(city in vData)){el.textContent='该城市无整车数据';el.className='card-value error';det.textContent='车型: '+vehicle;return;}
+  const price=vData[city];
+  if(price==='/'||price===null||price===undefined){el.textContent='该线路不可用';el.className='card-value error';det.textContent='车型: '+vehicle;return;}
+  el.className='card-value';
+  el.textContent='¥ '+Number(price).toFixed(2);
+  det.textContent='车型: '+vehicle+' | '+pallets+'板';
+}
+
+function calcDomestic(weight,volume,city,cargoValue){
+  const el=document.getElementById('domResult');
+  const det=document.getElementById('domDetail');
+  const expressWeight=Math.max(weight,volume*1000/6);
+  const d=findSfCity(city);
+  if(!d){el.textContent='该城市无快递数据';el.className='card-value error';det.textContent='';return;}
+  let total=0;
+  let formula='';
+  if(expressWeight<=20){
+    total=d.first;
+    formula='首重计费 (≤20kg)';
+  }else if(expressWeight<=60){
+    total=d.first+(expressWeight-20)*d.cont1;
+    formula='首重+续重1 (20-60kg)';
+  }else{
+    total=d.first+40*d.cont1+(expressWeight-60)*d.cont2;
+    formula='首重+续重1+续重2 (>60kg)';
+  }
+  total=Math.round(total*100)/100;
+  el.className='card-value';
+  el.textContent='¥ '+total.toFixed(2);
+  let note='快递计费重量: '+expressWeight.toFixed(2)+'kg | '+formula;
+  if(cargoValue===null){
+    note+='<br><span style="color:#e53e3e">* 未填货值，结果不包含保费</span>';
+  }
+  det.innerHTML=note;
+}
+
+function calcIntl(weight,volume){
+  const el=document.getElementById('intlResult');
+  const det=document.getElementById('intlDetail');
+  const expressWeight=Math.max(weight,volume*1000/6);
+
+  // 越南=ZONE5(index4), 美国=ZONE6(index5)
+  function calcDHL(zoneIdx,zoneName){
+    if(expressWeight<=30){
+      // 找最近的0.5档
+      let w=Math.ceil(expressWeight*2)/2;
+      if(w<0.5) w=0.5;
+      if(w>30) w=30;
+      const prices=dhlFirst[w];
+      if(!prices) return {cost:null,note:'重量超出首重范围'};
+      return {cost:prices[zoneIdx],note:zoneName+' 首重 '+w+'kg'};
+    }else{
+      // 首30kg + 续重
+      const base30=dhlFirst[30][zoneIdx];
+      let cost=base30;
+      let note=zoneName+' 首重30kg: $'+base30.toFixed(2);
+      const remain=expressWeight-30;
+      if(expressWeight<=70){
+        cost+=remain*dhlCont1[zoneIdx];
+        note+=' + 续重1 '+(remain).toFixed(1)+'kg×$'+dhlCont1[zoneIdx];
+      }else if(expressWeight<=300){
+        cost+=40*dhlCont1[zoneIdx];
+        cost+=(expressWeight-70)*dhlCont2[zoneIdx];
+        note+=' + 续重1 40kg + 续重2 '+(expressWeight-70).toFixed(1)+'kg';
+      }else{
+        cost+=40*dhlCont1[zoneIdx];
+        cost+=230*dhlCont2[zoneIdx];
+        cost+=(expressWeight-300)*dhlCont3[zoneIdx];
+        note+=' + 续重1 40kg + 续重2 230kg + 续重3 '+(expressWeight-300).toFixed(1)+'kg';
+      }
+      return {cost:Math.round(cost*100)/100,note:note};
+    }
+  }
+
+  const vn=calcDHL(4,'越南ZONE5');
+  const us=calcDHL(5,'美国ZONE6');
+
+  el.className='card-value';
+  let html='';
+  if(vn.cost!==null) html+='越南: $'+vn.cost.toFixed(2);
+  if(us.cost!==null) html+=(html?' | ':'')+'美国: $'+us.cost.toFixed(2);
+  if(!html) html='无法计算';
+  el.innerHTML=html;
+  det.innerHTML='快递计费重量: '+expressWeight.toFixed(2)+'kg<br>'+vn.note+'<br>'+us.note;
+}
+</script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
